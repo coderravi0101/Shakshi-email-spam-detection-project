@@ -2,10 +2,18 @@ import os
 import logging
 import joblib
 import numpy as np
-from flask import Flask, request, render_template, jsonify
+import streamlit as st
 from datetime import datetime
 
-# Configure Structured Logging
+# Page Configuration
+st.set_page_config(
+    page_title="Spam Detection Engine",
+    page_icon="🛡️",
+    layout="centered",
+    initial_sidebar_state="expanded"
+)
+
+# Configure Logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] in %(module)s: %(message)s',
@@ -16,148 +24,105 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-app.config['JSON_SORT_KEYS'] = False
-
 # Define Artifact Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ARTIFACTS_DIR = os.path.join(BASE_DIR, 'artifacts')
 MODEL_PATH = os.path.join(ARTIFACTS_DIR, 'model.joblib')
 VECTORIZER_PATH = os.path.join(ARTIFACTS_DIR, 'vectorizer.joblib')
 
-model = None
-vectorizer = None
-
+@st.cache_resource
 def load_artifacts():
-    """Loads Machine Learning artifacts into memory safely."""
-    global model, vectorizer
+    """Loads and caches Machine Learning artifacts into memory safely."""
     try:
         if os.path.exists(MODEL_PATH) and os.path.exists(VECTORIZER_PATH):
             model = joblib.load(MODEL_PATH)
             vectorizer = joblib.load(VECTORIZER_PATH)
             logger.info("✅ Machine Learning artifacts successfully loaded.")
+            return model, vectorizer, True
         else:
-            logger.warning(f"⚠️ Artifact files not found. Expected paths:")
-            logger.warning(f"   - Model: {MODEL_PATH}")
-            logger.warning(f"   - Vectorizer: {VECTORIZER_PATH}")
+            logger.warning(f"⚠️ Artifact files not found in 'artifacts/' directory.")
+            return None, None, False
     except Exception as e:
         logger.error(f"❌ Failed to load artifacts: {str(e)}", exc_info=True)
+        return None, None, False
 
-# Initial Artifact Load
-load_artifacts()
+# Load ML Models
+model, vectorizer, artifacts_loaded = load_artifacts()
 
-@app.route('/', methods=['GET'])
-def index():
-    """Renders main user interface."""
-    logger.info("📄 Serving index page")
-    return render_template('index.html')
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Service Health Probe for Load Balancers / Kubernetes."""
-    status = "healthy" if (model and vectorizer) else "degraded"
-    code = 200 if status == "healthy" else 503
-    health_data = {
-        "status": status,
-        "model_loaded": model is not None,
-        "vectorizer_loaded": vectorizer is not None,
-        "timestamp": datetime.utcnow().isoformat()
-    }
-    logger.info(f"🔍 Health check: {status}")
-    return jsonify(health_data), code
-
-@app.route('/api/predict', methods=['POST'])
-def predict():
-    """Unified API Endpoint for web interface and REST consumers."""
+# Sidebar Setup
+with st.sidebar:
+    st.header("⚙️ System Status")
+    if artifacts_loaded:
+        st.success("Model Engine: Active")
+        st.caption("TF-IDF Naive Bayes Engine")
+    else:
+        st.error("Model Engine: Offline")
+        st.caption("Missing artifact files in `/artifacts` folder.")
     
-    # Validate Model Availability
-    if not model or not vectorizer:
-        logger.error("❌ Model engine unavailable")
-        return jsonify({
-            'status': 'error',
-            'message': 'Model engine is unavailable. Check system logs.',
-            'timestamp': datetime.utcnow().isoformat()
-        }), 503
+    st.divider()
+    st.markdown("### 👨‍💻 Developer Info")
+    st.info("**Created by Shashi**")
+    st.caption("Enterprise NLP & Fraud Detection System")
 
-    # Parse JSON Payload
-    try:
-        data = request.get_json(force=True)
-    except Exception as e:
-        logger.warning(f"⚠️ Invalid JSON payload: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': 'Invalid JSON payload.',
-            'timestamp': datetime.utcnow().isoformat()
-        }), 400
+# Main Header
+st.title("🛡️ Text Classification System")
+st.subheader("Enterprise Spam & Fraud Detection Engine")
+st.caption("Analyze suspicious messages, emails, or texts in real time.")
 
-    # Extract and Validate Message
-    message = data.get('message', '').strip() if data else ''
+st.divider()
 
-    if not message:
-        logger.warning("⚠️ Empty message provided")
-        return jsonify({
-            'status': 'error',
-            'message': 'Payload field "message" cannot be empty.',
-            'timestamp': datetime.utcnow().isoformat()
-        }), 422
+# Input Section
+user_message = st.text_area(
+    label="Enter Text / Message Content:",
+    placeholder="e.g., Congratulations! You have won a free $1000 gift card. Click here to claim your reward now...",
+    height=150
+)
 
-    # Perform Inference
-    try:
-        logger.info(f"📊 Processing email (length: {len(message)} chars)")
-        
-        # Transform & Predict
-        transformed_text = vectorizer.transform([message])
-        prediction_raw = model.predict(transformed_text)[0]
-        probabilities = model.predict_proba(transformed_text)[0]
-        confidence = round(float(np.max(probabilities)) * 100, 2)
+# Inference Action
+if st.button("🚀 Analyze Message", use_container_width=True, type="primary"):
+    if not artifacts_loaded:
+        st.error("❌ Model engine unavailable. Please check system artifacts.")
+        logger.error("❌ Prediction attempted while artifacts were missing.")
+    elif not user_message.strip():
+        st.warning("⚠️ Message content cannot be empty. Please enter text to analyze.")
+        logger.warning("⚠️ Empty message input submitted.")
+    else:
+        try:
+            logger.info(f"📊 Processing text input (Length: {len(user_message)} chars)")
+            
+            # Vectorize & Predict
+            transformed_text = vectorizer.transform([user_message])
+            prediction_raw = model.predict(transformed_text)[0]
+            probabilities = model.predict_proba(transformed_text)[0]
+            confidence = round(float(np.max(probabilities)) * 100, 2)
 
-        # Standardize Output Label
-        prediction_label = "Spam" if str(prediction_raw).lower() in ['1', 'spam', 'true'] else "Ham"
+            # Standardize Label
+            prediction_label = "Spam" if str(prediction_raw).lower() in ['1', 'spam', 'true'] else "Ham"
+            
+            logger.info(f"✅ Prediction: {prediction_label} (Confidence: {confidence}%)")
 
-        logger.info(f"✅ Prediction: {prediction_label} (Confidence: {confidence}%)")
+            st.divider()
 
-        return jsonify({
-            'status': 'success',
-            'prediction': prediction_label,
-            'confidence': confidence,
-            'message': message[:100] + '...' if len(message) > 100 else message,
-            'timestamp': datetime.utcnow().isoformat()
-        }), 200
+            # Output UI Rendering
+            if prediction_label == "Spam":
+                st.error("🚨 **Spam / Fraud Detected**")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric(label="Classification Result", value="Spam")
+                with col2:
+                    st.metric(label="Confidence Score", value=f"{confidence}%")
+            else:
+                st.success("✅ **Safe / Legitimate Text (Ham)**")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric(label="Classification Result", value="Ham")
+                with col2:
+                    st.metric(label="Confidence Score", value=f"{confidence}%")
 
-    except Exception as e:
-        logger.error(f"❌ Inference error: {str(e)}", exc_info=True)
-        return jsonify({
-            'status': 'error',
-            'message': 'Internal inference failure.',
-            'timestamp': datetime.utcnow().isoformat()
-        }), 500
+        except Exception as e:
+            st.error("❌ Internal inference error occurred while processing text.")
+            logger.error(f"❌ Inference error: {str(e)}", exc_info=True)
 
-@app.errorhandler(404)
-def not_found(error):
-    """Handle 404 errors."""
-    logger.warning(f"⚠️ Resource not found: {request.path}")
-    return jsonify({
-        'status': 'error',
-        'message': 'Resource not found.',
-        'timestamp': datetime.utcnow().isoformat()
-    }), 404
-
-@app.errorhandler(500)
-def server_error(error):
-    """Handle 500 errors."""
-    logger.error(f"❌ Server error: {str(error)}", exc_info=True)
-    return jsonify({
-        'status': 'error',
-        'message': 'Internal server error.',
-        'timestamp': datetime.utcnow().isoformat()
-    }), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    
-    logger.info(f"🚀 Starting Spam Detection Service...")
-    logger.info(f"📍 Server: http://0.0.0.0:{port}")
-    logger.info(f"🔧 Debug Mode: {debug_mode}")
-    
-    app.run(host='0.0.0.0', port=port, debug=debug_mode)
+# Footer
+st.divider()
+st.caption("Powered by Scikit-Learn • Streamlit Engine • Created by Shashi")
