@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Spam Detection System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+            animation: slideIn 0.6s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 120px;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-analyze {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-analyze:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-analyze:active {
+            transform: translateY(0);
+        }
+
+        .btn-clear {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .btn-clear:hover {
+            background: #e8e8e8;
+        }
+
+        .btn-analyze.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .result-container {
+            margin-top: 35px;
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-box {
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+
+        .result-box.spam {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+        }
+
+        .result-box.ham {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+
+        .result-box.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+
+        .result-label {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+
+        .result-box.spam .result-label {
+            color: #856404;
+        }
+
+        .result-box.ham .result-label {
+            color: #155724;
+        }
+
+        .result-box.error .result-label {
+            color: #721c24;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .badge.spam {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .badge.ham {
+            background: #28a745;
+            color: white;
+        }
+
+        .confidence {
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        .confidence-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .error-message {
+            color: #721c24;
+            padding: 12px;
+            background: #f8d7da;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .info-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+            font-size: 13px;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .info-section h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .loading-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 25px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            textarea {
+                min-height: 100px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ Email Spam Detection</h1>
+            <p>Advanced Machine Learning-Based Classification System</p>
+        </div>
+
+        <form id="spamForm">
+            <div class="form-group">
+                <label for="message">Email Content</label>
+                <textarea 
+                    id="message" 
+                    placeholder="Paste your email content here for analysis..."
+                    required
+                ></textarea>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="btn-analyze" id="analyzeBtn">
+                    Analyze Email
+                </button>
+                <button type="reset" class="btn-clear">Clear</button>
+            </div>
+        </form>
+
+        <div class="result-container" id="resultContainer"></div>
+
+        <div class="info-section">
+            <h3>ℹ️ How It Works</h3>
+            <p>This system uses machine learning to classify emails as either <strong>Spam</strong> or <strong>Ham</strong> (legitimate). 
+            The confidence score indicates how certain the model is about its prediction. Results above 80% confidence are generally highly reliable.</p>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('spamForm');
+        const messageInput = document.getElementById('message');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const resultContainer = document.getElementById('resultContainer');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await analyzEmail();
+        });
+
+        async function analyzEmail() {
+            const message = messageInput.value.trim();
+
+            if (!message) {
+                showError('Please enter email content to analyze.');
+                return;
+            }
+
+            analyzeBtn.classList.add('loading');
+            analyzeBtn.innerHTML = '<span class="spinner"></span>Analyzing...';
+            resultContainer.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    displayResult(data);
+                } else {
+                    showError(data.message || 'An error occurred during analysis.');
+                }
+            } catch (error) {
+                showError('Network error: Unable to reach the server.');
+                console.error('Error:', error);
+            } finally {
+                analyzeBtn.classList.remove('loading');
+                analyzeBtn.innerHTML = 'Analyze Email';
+            }
+        }
+
+        function displayResult(data) {
+            const isSpam = data.prediction.toLowerCase() === 'spam';
+            const resultType = isSpam ? 'spam' : 'ham';
+            const confidence = data.confidence || 0;
+
+            const resultHTML = `
+                <div class="result-box ${resultType}">
+                    <div class="result-label">
+                        ${isSpam ? '⚠️ SPAM DETECTED' : '✅ LEGITIMATE EMAIL'}
+                        <span class="badge ${resultType}">${data.prediction}</span>
+                    </div>
+                    <div class="confidence">
+                        <strong>Confidence Score:</strong> ${confidence}%
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" style="width: ${confidence}%"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            resultContainer.innerHTML = resultHTML;
+            resultContainer.style.display = 'block';
+            resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function showError(message) {
+            resultContainer.innerHTML = `
+                <div class="result-box error">
+                    <div class="result-label">⚠️ Error</div>
+                    <div class="error-message">${message}</div>
+                </div>
+            `;
+            resultContainer.style.display = 'block';
+        }
+
+        // Health check on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                if (data.status === 'degraded') {
+                    console.warn('Warning: Model not fully loaded');
+                }
+            } catch (error) {
+                console.error('Health check failed:', error);
+            }
+        });
+    </script>
+</body>
+</html>
